@@ -4,14 +4,19 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+// ... (existing using statements)
+
 namespace Microsoft.MixedReality.SampleQRCodes
 {
     public class QRCodesVisualizer : MonoBehaviour
     {
         public GameObject qrCodePrefab;
+        public GameObject cubeQR;  // Assign this in the Unity Inspector to the CubeQR GameObject
 
         private SortedDictionary<System.Guid, GameObject> qrCodesObjectsList;
         private bool clearExisting = false;
+        private System.Guid targetQRCodeId = System.Guid.Empty;  // ID of the QR code to attach CubeQR to
+        private bool isCubeQRAttached = false;
 
         struct ActionData
         {
@@ -48,6 +53,7 @@ namespace Microsoft.MixedReality.SampleQRCodes
                 throw new System.Exception("Prefab not assigned");
             }
         }
+
         private void Instance_QRCodesTrackingStateChanged(object sender, bool status)
         {
             if (!status)
@@ -93,21 +99,36 @@ namespace Microsoft.MixedReality.SampleQRCodes
                 while (pendingActions.Count > 0)
                 {
                     var action = pendingActions.Dequeue();
-                    if (action.type == ActionData.Type.Added)
+                    if (action.type == ActionData.Type.Added || action.type == ActionData.Type.Updated)
                     {
-                        GameObject qrCodeObject = Instantiate(qrCodePrefab, new Vector3(0, 0, 0), Quaternion.identity);
-                        qrCodeObject.GetComponent<SpatialGraphNodeTracker>().Id = action.qrCode.SpatialGraphNodeId;
-                        qrCodeObject.GetComponent<QRCode>().qrCode = action.qrCode;
-                        qrCodesObjectsList.Add(action.qrCode.Id, qrCodeObject);
-                    }
-                    else if (action.type == ActionData.Type.Updated)
-                    {
-                        if (!qrCodesObjectsList.ContainsKey(action.qrCode.Id))
+                        // Check if the QR code data is "Q67"
+                        if (action.qrCode.Data == "Q67")
                         {
-                            GameObject qrCodeObject = Instantiate(qrCodePrefab, new Vector3(0, 0, 0), Quaternion.identity);
-                            qrCodeObject.GetComponent<SpatialGraphNodeTracker>().Id = action.qrCode.SpatialGraphNodeId;
-                            qrCodeObject.GetComponent<QRCode>().qrCode = action.qrCode;
-                            qrCodesObjectsList.Add(action.qrCode.Id, qrCodeObject);
+                            targetQRCodeId = action.qrCode.Id;  // Store the ID of Q67
+                            isCubeQRAttached = true;  // Set the flag indicating the CubeQR should be attached
+
+                            // Create a new GameObject for Q67 if it doesn't exist
+                            if (!qrCodesObjectsList.ContainsKey(action.qrCode.Id))
+                            {
+                                GameObject qrCodeObject = Instantiate(qrCodePrefab, Vector3.zero, Quaternion.identity);
+                                qrCodeObject.GetComponent<SpatialGraphNodeTracker>().Id = action.qrCode.SpatialGraphNodeId;
+                                qrCodeObject.GetComponent<QRCode>().qrCode = action.qrCode;
+                                qrCodesObjectsList.Add(action.qrCode.Id, qrCodeObject);
+                            }
+
+                            // Attach CubeQR to the QR code GameObject
+                            AttachCubeQRToQRCode(qrCodesObjectsList[action.qrCode.Id]);
+                        }
+                        else
+                        {
+                            // Handle other QR codes as usual
+                            if (!qrCodesObjectsList.ContainsKey(action.qrCode.Id))
+                            {
+                                GameObject qrCodeObject = Instantiate(qrCodePrefab, Vector3.zero, Quaternion.identity);
+                                qrCodeObject.GetComponent<SpatialGraphNodeTracker>().Id = action.qrCode.SpatialGraphNodeId;
+                                qrCodeObject.GetComponent<QRCode>().qrCode = action.qrCode;
+                                qrCodesObjectsList.Add(action.qrCode.Id, qrCodeObject);
+                            }
                         }
                     }
                     else if (action.type == ActionData.Type.Removed)
@@ -116,6 +137,12 @@ namespace Microsoft.MixedReality.SampleQRCodes
                         {
                             Destroy(qrCodesObjectsList[action.qrCode.Id]);
                             qrCodesObjectsList.Remove(action.qrCode.Id);
+                        }
+
+                        // If the removed QR code is Q67, detach CubeQR
+                        if (action.qrCode.Id == targetQRCodeId)
+                        {
+                            DetachCubeQR();
                         }
                     }
                 }
@@ -128,7 +155,26 @@ namespace Microsoft.MixedReality.SampleQRCodes
                     Destroy(obj.Value);
                 }
                 qrCodesObjectsList.Clear();
+                DetachCubeQR();  // Detach CubeQR when clearing all QR codes
+            }
+        }
 
+        private void AttachCubeQRToQRCode(GameObject qrCodeObject)
+        {
+            if (cubeQR != null)
+            {
+                cubeQR.transform.SetParent(qrCodeObject.transform);  // Attach CubeQR to the QR code
+                cubeQR.transform.localPosition = Vector3.zero;  // Reset position relative to the QR code
+                cubeQR.transform.localRotation = Quaternion.identity;  // Reset rotation relative to the QR code
+            }
+        }
+
+        private void DetachCubeQR()
+        {
+            if (cubeQR != null && isCubeQRAttached)
+            {
+                cubeQR.transform.SetParent(null);  // Detach CubeQR from the QR code
+                isCubeQRAttached = false;  // Reset the attachment flag
             }
         }
 
@@ -139,3 +185,5 @@ namespace Microsoft.MixedReality.SampleQRCodes
         }
     }
 }
+
+
